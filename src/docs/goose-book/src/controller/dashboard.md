@@ -49,3 +49,44 @@ cargo run --release --example umami -- \
   --host http://localhost/ -u20 -r5 -t2m --no-reset-metrics
 # Log line: [dashboard]: listening on http://127.0.0.1:5118/
 ```
+
+## Frontend selection (compile time)
+
+The dashboard **HTTP API is always the same**; only the browser UI is chosen with Cargo features
+(enable **exactly one**):
+
+| Feature | Frontend | Notes |
+| --- | --- | --- |
+| `dashboard-js` (**default**) | Vanilla JS + [ECharts](https://echarts.apache.org) (CDN) | Legend, axes, grid, tooltips; no WASM toolchain |
+| `dashboard-wasm` | [Yew](https://yew.rs/) → WebAssembly | Rust UI; SVG charts with legend, axes, and grid |
+
+```bash
+# Default (JS + ECharts)
+cargo build --release --example umami
+
+# Explicit JS only (disable defaults if you had enabled wasm in .cargo/config, etc.)
+cargo build --release --example umami --no-default-features --features cookies,dashboard-js
+
+# WASM UI — additive is enough; if both features are on, WASM is used
+./scripts/build-dashboard-ui.sh
+cargo build --release --example umami --features dashboard-wasm
+# equivalent explicit form:
+cargo build --release --example umami --no-default-features --features cookies,dashboard-wasm
+```
+
+`dashboard-js` is in **default** features. Adding `--features dashboard-wasm` therefore enables
+**both** unless you pass `--no-default-features`. That is supported: **WASM takes precedence**
+when both are enabled.
+
+## WebAssembly UI rebuild
+
+Artifacts under `src/dashboard/static/wasm/` are embedded only when `dashboard-wasm` is enabled.
+
+```bash
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli --version 0.2.126
+./scripts/build-dashboard-ui.sh
+cargo build --release --no-default-features --features cookies,dashboard-wasm
+```
+
+The `wasm-bindgen` CLI version must match the crate used by `dashboard-ui` (pinned to `0.2.126`).

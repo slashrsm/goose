@@ -10,9 +10,31 @@
   function lineOption(name, xs, ys, color) {
     return {
       animation: false,
-      grid: { left: 40, right: 12, top: 16, bottom: 28 },
-      xAxis: { type: "category", data: xs, axisLabel: { color: "#8b9bb4" }, axisLine: { lineStyle: { color: "#2d3a4d" } } },
-      yAxis: { type: "value", axisLabel: { color: "#8b9bb4" }, splitLine: { lineStyle: { color: "#2d3a4d" } } },
+      legend: {
+        data: [name],
+        textStyle: { color: "#8b9bb4" },
+        top: 0,
+        right: 8,
+      },
+      grid: { left: 48, right: 16, top: 32, bottom: 32 },
+      xAxis: {
+        type: "category",
+        name: "s",
+        nameTextStyle: { color: "#8b9bb4" },
+        data: xs,
+        axisLabel: { color: "#8b9bb4" },
+        axisLine: { lineStyle: { color: "#2d3a4d" } },
+        axisTick: { lineStyle: { color: "#2d3a4d" } },
+        splitLine: { show: false },
+      },
+      yAxis: {
+        type: "value",
+        nameTextStyle: { color: "#8b9bb4" },
+        axisLabel: { color: "#8b9bb4" },
+        axisLine: { show: true, lineStyle: { color: "#2d3a4d" } },
+        axisTick: { lineStyle: { color: "#2d3a4d" } },
+        splitLine: { lineStyle: { color: "#2d3a4d", type: "dashed" } },
+      },
       series: [{
         name,
         type: "line",
@@ -43,9 +65,16 @@
     el.className = "badge phase-" + String(phase || "idle").toLowerCase();
   }
 
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
   function renderTables(data) {
-    const reqBody = $("tbl-requests");
-    reqBody.innerHTML = (data.requests || []).map((r) => `<tr>
+    $("tbl-requests").innerHTML = (data.requests || []).map((r) => `<tr>
       <td>${escapeHtml(r.method)}</td>
       <td>${escapeHtml(r.name)}</td>
       <td>${r.success_count + r.fail_count}</td>
@@ -88,14 +117,6 @@
     </tr>`).join("");
   }
 
-  function escapeHtml(s) {
-    return String(s)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-  }
-
   function applySummary(data) {
     setPhase(data.phase);
     $("elapsed").textContent = (data.elapsed_secs || 0) + "s";
@@ -112,7 +133,7 @@
     const xs = (ts.elapsed_secs || []).map(String);
     charts.rps.setOption(lineOption("RPS", xs, ts.requests_per_second || [], "#3d9cf0"), true);
     charts.users.setOption(lineOption("Users", xs, ts.users || [], "#3dd68c"), true);
-    charts.rt.setOption(lineOption("Avg RT", xs, ts.average_response_time_ms || [], "#f5a524"), true);
+    charts.rt.setOption(lineOption("Avg RT (ms)", xs, ts.average_response_time_ms || [], "#f5a524"), true);
 
     renderTables(data);
   }
@@ -158,7 +179,7 @@
       setConn("live");
       try {
         applySummary(JSON.parse(ev.data));
-      } catch (e) { /* ignore parse errors */ }
+      } catch (e) { /* ignore */ }
     });
     es.onerror = () => {
       es.close();

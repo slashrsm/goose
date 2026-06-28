@@ -11,3 +11,4 @@
 
 # Local Drupal Umami target (not part of Goose itself)
 umami-site/
+dashboard-ui/target/

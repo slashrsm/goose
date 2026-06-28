@@ -128,3 +128,13 @@ footer {
   border-top: 1px solid var(--border);
 }
 footer code { color: var(--accent); }
+
+/* WASM UI sparklines */
+svg.spark {
+  width: 100%;
+  height: 220px;
+  display: block;
+}
+#loading { min-height: 40vh; }
+
+div.chart { width: 100%; height: 220px; }

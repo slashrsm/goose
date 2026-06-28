@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Goose Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div id="loading" style="color:#8b9bb4;padding:2rem;font-family:system-ui">Loading WASM dashboard…</div>
+  <script type="module">
+    import init from '/static/wasm/goose_dashboard_ui.js';
+    const loading = document.getElementById('loading');
+    init().then(() => {
+      if (loading) loading.remove();
+    }).catch((err) => {
+      console.error(err);
+      if (loading) {
+        loading.textContent = 'Failed to load WASM UI. Run: scripts/build-dashboard-ui.sh';
+        loading.style.color = '#f31260';
+      }
+    });
+  </script>
+</body>
+</html>
