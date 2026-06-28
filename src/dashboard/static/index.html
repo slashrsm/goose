@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Goose Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.2.2/dist/echarts.min.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="logo">Goose</span>
+      <span class="subtitle">Live load test dashboard</span>
+    </div>
+    <div class="meta">
+      <span id="phase" class="badge phase-idle">Idle</span>
+      <span id="elapsed" class="mono">0s</span>
+      <span id="hosts" class="hosts"></span>
+      <span id="conn" class="conn disconnected">disconnected</span>
+    </div>
+  </header>
+
+  <section class="kpis" id="kpis">
+    <div class="kpi"><div class="label">Active users</div><div class="value" id="kpi-users">0</div></div>
+    <div class="kpi"><div class="label">RPS</div><div class="value" id="kpi-rps">0</div></div>
+    <div class="kpi"><div class="label">Fail %</div><div class="value" id="kpi-fail">0%</div></div>
+    <div class="kpi"><div class="label">p95 (ms)</div><div class="value" id="kpi-p95">—</div></div>
+    <div class="kpi"><div class="label">Requests</div><div class="value" id="kpi-reqs">0</div></div>
+    <div class="kpi"><div class="label">Errors</div><div class="value" id="kpi-errs">0</div></div>
+  </section>
+
+  <section class="charts">
+    <div class="chart-card"><div class="chart-title">Requests / second</div><div id="chart-rps" class="chart"></div></div>
+    <div class="chart-card"><div class="chart-title">Active users</div><div id="chart-users" class="chart"></div></div>
+    <div class="chart-card"><div class="chart-title">Avg response time (ms)</div><div id="chart-rt" class="chart"></div></div>
+  </section>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="requests">Requests</button>
+    <button class="tab" data-tab="transactions">Transactions</button>
+    <button class="tab" data-tab="scenarios">Scenarios</button>
+    <button class="tab" data-tab="errors">Errors</button>
+  </nav>
+
+  <section class="panels">
+    <div id="panel-requests" class="panel active">
+      <table>
+        <thead>
+          <tr>
+            <th>Method</th><th>Name</th><th># Req</th><th># Fail</th><th>RPS</th><th>Fail/s</th>
+            <th>Avg</th><th>Min</th><th>Max</th><th>p50</th><th>p95</th><th>p99</th>
+          </tr>
+        </thead>
+        <tbody id="tbl-requests"></tbody>
+      </table>
+    </div>
+    <div id="panel-transactions" class="panel">
+      <table>
+        <thead>
+          <tr>
+            <th>Scenario</th><th>Transaction</th><th># Run</th><th># Fail</th><th>TPS</th><th>Fail/s</th>
+            <th>Avg</th><th>Min</th><th>Max</th>
+          </tr>
+        </thead>
+        <tbody id="tbl-transactions"></tbody>
+      </table>
+    </div>
+    <div id="panel-scenarios" class="panel">
+      <table>
+        <thead>
+          <tr>
+            <th>Scenario</th><th>Users</th><th># Run</th><th>Scen/s</th><th>Avg</th><th>Min</th><th>Max</th>
+          </tr>
+        </thead>
+        <tbody id="tbl-scenarios"></tbody>
+      </table>
+    </div>
+    <div id="panel-errors" class="panel">
+      <table>
+        <thead><tr><th>Count</th><th>Error</th></tr></thead>
+        <tbody id="tbl-errors"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    Running metrics are approximate while the test is in progress.
+    Use <code>--report-file</code> for an archival HTML report when the test finishes.
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

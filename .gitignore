@@ -8,3 +8,6 @@
 /.idea
 /.env
 /.venv
+
+# Local Drupal Umami target (not part of Goose itself)
+umami-site/

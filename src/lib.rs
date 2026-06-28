@@ -42,6 +42,7 @@ extern crate log;
 pub mod client;
 pub mod config;
 pub mod controller;
+pub(crate) mod dashboard;
 pub mod goose;
 mod graph;
 pub mod logger;
@@ -77,6 +78,9 @@ const DEFAULT_TELNET_PORT: &str = "5116";
 
 /// Constant defining Goose's default WebSocket Controller port.
 const DEFAULT_WEBSOCKET_PORT: &str = "5117";
+
+/// Constant defining Goose's default web dashboard port.
+const DEFAULT_DASHBOARD_PORT: &str = "5118";
 
 lazy_static! {
     // WORKER_ID is used to identify different works when running a gaggle.
@@ -371,6 +375,8 @@ struct GooseAttackRunState {
     parent_to_throttle_tx: Option<flume::Sender<bool>>,
     /// Optional channel allowing controller thread to make requests, if not disabled.
     controller_channel_rx: Option<flume::Receiver<ControllerRequest>>,
+    /// Embedded web dashboard runtime (live state + metrics channel), if enabled.
+    dashboard: Option<dashboard::DashboardRuntime>,
     /// A flag tracking whether or not the header has been written when the metrics
     /// log is enabled.
     metrics_header_displayed: bool,
@@ -1008,6 +1014,26 @@ impl GooseAttack {
         self.attack_phase = phase;
     }
 
+    /// Refresh shared dashboard state from the current attack loop snapshot.
+    async fn sync_dashboard_state(&self, goose_attack_run_state: &GooseAttackRunState) {
+        let Some(runtime) = goose_attack_run_state.dashboard.as_ref() else {
+            return;
+        };
+        let hosts: Vec<String> = self.metrics.hosts.iter().cloned().collect();
+        dashboard::update_live_state(
+            &runtime.live,
+            self.attack_phase.clone(),
+            goose_attack_run_state.active_users,
+            self.metrics.maximum_users,
+            self.metrics.total_users,
+            self.metrics.duration,
+            hosts,
+            self.metrics.display_metrics,
+            self.metrics.history.clone(),
+        )
+        .await;
+    }
+
     // Display all scenarios (sorted by machine name).
     fn print_scenarios(&self) {
         let mut scenarios = BTreeMap::new();
@@ -1458,6 +1484,15 @@ impl GooseAttack {
         );
         let metrics_processor_handle = Some(tokio::spawn(processor.run()));
 
+        // Optionally spawn the live web dashboard (reads metrics via metrics_cmd_tx).
+        let dashboard = dashboard::setup_dashboard(
+            &mut self.configuration,
+            self.defaults.dashboard_host.clone(),
+            self.defaults.dashboard_port,
+            metrics_cmd_tx.clone(),
+        )
+        .await;
+
         let goose_attack_run_state = GooseAttackRunState {
             adjust_user_timer: std_now,
             adjust_user_in_ms: 0,
@@ -1474,6 +1509,7 @@ impl GooseAttack {
             throttle_threads_tx: None,
             parent_to_throttle_tx: None,
             controller_channel_rx,
+            dashboard,
             metrics_header_displayed: false,
             idle_status_displayed: false,
             users: Vec::new(),
@@ -2019,11 +2055,16 @@ impl GooseAttack {
             goose_attack_run_state.request_counter_registry.clone(),
             goose_attack_run_state.all_threads_logger_tx.clone(),
         );
-        goose_attack_run_state.metrics_cmd_tx = metrics_cmd_tx;
+        goose_attack_run_state.metrics_cmd_tx = metrics_cmd_tx.clone();
         if let Some(handle) = goose_attack_run_state.metrics_processor_handle.take() {
             let _ = handle.await;
         }
         goose_attack_run_state.metrics_processor_handle = Some(tokio::spawn(processor.run()));
+
+        // Keep the dashboard pointed at the new metrics processor.
+        if let Some(runtime) = goose_attack_run_state.dashboard.as_ref() {
+            dashboard::update_metrics_cmd_tx(runtime, metrics_cmd_tx).await;
+        }
 
         // Try to create the requested report files, to confirm access.
         self.create_reports().await?;
@@ -2096,6 +2137,9 @@ impl GooseAttack {
                 // By reaching the Shutdown phase, break out of the GooseAttack loop.
                 AttackPhase::Shutdown => break,
             }
+
+            // Keep the live web dashboard in sync with the attack loop.
+            self.sync_dashboard_state(&goose_attack_run_state).await;
 
             // Record current users for users per second graph in HTML report.
             if let Some(started) = self.started {

@@ -201,6 +201,15 @@ pub struct GooseConfiguration {
     /// Sets WebSocket Controller TCP port (default: 5117)
     #[options(no_short, meta = "PORT")]
     pub websocket_port: u16,
+    /// Doesn't enable the live web dashboard
+    #[options(no_short)]
+    pub no_dashboard: bool,
+    /// Sets web dashboard host (default: 127.0.0.1)
+    #[options(no_short, meta = "HOST")]
+    pub dashboard_host: String,
+    /// Sets web dashboard TCP port (default: 5118)
+    #[options(no_short, meta = "PORT")]
+    pub dashboard_port: u16,
     /// Doesn't automatically start load test
     #[options(no_short)]
     pub no_autostart: bool,
@@ -344,6 +353,8 @@ pub(crate) struct GooseDefaults {
     pub no_telnet: Option<bool>,
     /// An optional default for not enabling WebSocket Controller thread.
     pub no_websocket: Option<bool>,
+    /// An optional default for not enabling the live web dashboard.
+    pub no_dashboard: Option<bool>,
     /// An optional default for not auto-starting the load test.
     pub no_autostart: Option<bool>,
     /// An optional default for not setting the gzip Accept-Encoding header.
@@ -366,6 +377,10 @@ pub(crate) struct GooseDefaults {
     pub websocket_host: Option<String>,
     /// An optional default for port WebSocket Controller listens on.
     pub websocket_port: Option<u16>,
+    /// An optional default for host the web dashboard listens on.
+    pub dashboard_host: Option<String>,
+    /// An optional default for port the web dashboard listens on.
+    pub dashboard_port: Option<u16>,
     /// An optional default for not validating https certificates.
     pub accept_invalid_certs: Option<bool>,
     /// An optional default for PDF generation timeout (seconds).
@@ -455,6 +470,8 @@ pub enum GooseDefault {
     NoTelnet,
     /// An optional default for not enabling WebSocket Controller thread.
     NoWebSocket,
+    /// An optional default for not enabling the live web dashboard.
+    NoDashboard,
     /// An optional default for coordinated omission mitigation.
     CoordinatedOmissionMitigation,
     /// An optional default for not automatically starting load test.
@@ -477,6 +494,10 @@ pub enum GooseDefault {
     WebSocketHost,
     /// An optional default for port WebSocket Controller listens on.
     WebSocketPort,
+    /// An optional default for host the web dashboard listens on.
+    DashboardHost,
+    /// An optional default for port the web dashboard listens on.
+    DashboardPort,
     /// An optional default for not validating https certificates.
     AcceptInvalidCerts,
     /// An optional default for PDF generation timeout (seconds).
@@ -629,6 +650,7 @@ impl GooseDefaultType<&str> for GooseAttack {
             GooseDefault::Timeout => self.defaults.timeout = Some(value.to_string()),
             GooseDefault::TransactionLog => self.defaults.transaction_log = Some(value.to_string()),
             GooseDefault::WebSocketHost => self.defaults.websocket_host = Some(value.to_string()),
+            GooseDefault::DashboardHost => self.defaults.dashboard_host = Some(value.to_string()),
             // Otherwise display a helpful and explicit error.
             GooseDefault::Users
             | GooseDefault::IncreaseTime
@@ -640,7 +662,8 @@ impl GooseDefaultType<&str> for GooseAttack {
             | GooseDefault::Verbose
             | GooseDefault::ThrottleRequests
             | GooseDefault::TelnetPort
-            | GooseDefault::WebSocketPort => {
+            | GooseDefault::WebSocketPort
+            | GooseDefault::DashboardPort => {
                 return Err(GooseError::InvalidOption {
                     option: format!("GooseDefault::{key:?}"),
                     value: value.to_string(),
@@ -660,6 +683,7 @@ impl GooseDefaultType<&str> for GooseAttack {
             | GooseDefault::NoDebugBody
             | GooseDefault::NoTelnet
             | GooseDefault::NoWebSocket
+            | GooseDefault::NoDashboard
             | GooseDefault::NoAutoStart
             | GooseDefault::NoGzip
             | GooseDefault::NoStatusCodes
@@ -726,6 +750,7 @@ impl GooseDefaultType<usize> for GooseAttack {
             GooseDefault::ThrottleRequests => self.defaults.throttle_requests = Some(value),
             GooseDefault::TelnetPort => self.defaults.telnet_port = Some(value as u16),
             GooseDefault::WebSocketPort => self.defaults.websocket_port = Some(value as u16),
+            GooseDefault::DashboardPort => self.defaults.dashboard_port = Some(value as u16),
             #[cfg(feature = "pdf-reports")]
             GooseDefault::PdfTimeout => {
                 self.defaults.pdf_timeout = Some(value as u64)
@@ -747,6 +772,7 @@ impl GooseDefaultType<usize> for GooseAttack {
             | GooseDefault::Timeout
             | GooseDefault::TransactionLog
             | GooseDefault::WebSocketHost
+            | GooseDefault::DashboardHost
             => {
                 return Err(GooseError::InvalidOption {
                     option: format!("GooseDefault::{key:?}"),
@@ -766,6 +792,7 @@ impl GooseDefaultType<usize> for GooseAttack {
             | GooseDefault::NoDebugBody
             | GooseDefault::NoTelnet
             | GooseDefault::NoWebSocket
+            | GooseDefault::NoDashboard
             | GooseDefault::NoAutoStart
             | GooseDefault::NoGzip
             | GooseDefault::NoStatusCodes
@@ -822,6 +849,7 @@ impl GooseDefaultType<bool> for GooseAttack {
             GooseDefault::NoDebugBody => self.defaults.no_debug_body = Some(value),
             GooseDefault::NoTelnet => self.defaults.no_telnet = Some(value),
             GooseDefault::NoWebSocket => self.defaults.no_websocket = Some(value),
+            GooseDefault::NoDashboard => self.defaults.no_dashboard = Some(value),
             GooseDefault::NoAutoStart => self.defaults.no_autostart = Some(value),
             GooseDefault::NoGzip => self.defaults.no_gzip = Some(value),
             GooseDefault::AcceptInvalidCerts => self.defaults.accept_invalid_certs = Some(value),
@@ -845,6 +873,7 @@ impl GooseDefaultType<bool> for GooseAttack {
             | GooseDefault::Timeout
             | GooseDefault::TransactionLog
             | GooseDefault::WebSocketHost
+            | GooseDefault::DashboardHost
             => {
                 return Err(GooseError::InvalidOption {
                     option: format!("GooseDefault::{key:?}"),
@@ -865,7 +894,8 @@ impl GooseDefaultType<bool> for GooseAttack {
             | GooseDefault::Verbose
             | GooseDefault::ThrottleRequests
             | GooseDefault::TelnetPort
-            | GooseDefault::WebSocketPort => {
+            | GooseDefault::WebSocketPort
+            | GooseDefault::DashboardPort => {
                 return Err(GooseError::InvalidOption {
                     option: format!("GooseDefault::{key:?}"),
                     value: format!("{value}"),
@@ -930,6 +960,7 @@ impl GooseDefaultType<GooseCoordinatedOmissionMitigation> for GooseAttack {
             | GooseDefault::NoDebugBody
             | GooseDefault::NoTelnet
             | GooseDefault::NoWebSocket
+            | GooseDefault::NoDashboard
             | GooseDefault::NoAutoStart
             | GooseDefault::NoGzip
             | GooseDefault::NoStatusCodes
@@ -962,6 +993,7 @@ impl GooseDefaultType<GooseCoordinatedOmissionMitigation> for GooseAttack {
             | GooseDefault::Timeout
             | GooseDefault::TransactionLog
             | GooseDefault::WebSocketHost
+            | GooseDefault::DashboardHost
             => {
                 return Err(GooseError::InvalidOption {
                     option: format!("GooseDefault::{key:?}"),
@@ -982,7 +1014,8 @@ impl GooseDefaultType<GooseCoordinatedOmissionMitigation> for GooseAttack {
             | GooseDefault::Verbose
             | GooseDefault::ThrottleRequests
             | GooseDefault::TelnetPort
-            | GooseDefault::WebSocketPort => {
+            | GooseDefault::WebSocketPort
+            | GooseDefault::DashboardPort => {
                 return Err(GooseError::InvalidOption {
                     option: format!("GooseDefault::{key:?}"),
                     value: format!("{value:?}"),
@@ -1042,6 +1075,7 @@ impl GooseDefaultType<GooseLogFormat> for GooseAttack {
             | GooseDefault::NoDebugBody
             | GooseDefault::NoTelnet
             | GooseDefault::NoWebSocket
+            | GooseDefault::NoDashboard
             | GooseDefault::NoAutoStart
             | GooseDefault::NoGzip
             | GooseDefault::NoStatusCodes
@@ -1074,6 +1108,7 @@ impl GooseDefaultType<GooseLogFormat> for GooseAttack {
             | GooseDefault::Timeout
             | GooseDefault::TransactionLog
             | GooseDefault::WebSocketHost
+            | GooseDefault::DashboardHost
             => {
                 return Err(GooseError::InvalidOption {
                     option: format!("GooseDefault::{key:?}"),
@@ -1094,7 +1129,8 @@ impl GooseDefaultType<GooseLogFormat> for GooseAttack {
             | GooseDefault::Verbose
             | GooseDefault::ThrottleRequests
             | GooseDefault::TelnetPort
-            | GooseDefault::WebSocketPort => {
+            | GooseDefault::WebSocketPort
+            | GooseDefault::DashboardPort => {
                 return Err(GooseError::InvalidOption {
                     option: format!("GooseDefault::{key:?}"),
                     value: format!("{value:?}"),
@@ -1879,6 +1915,22 @@ impl GooseConfiguration {
                 GooseValue {
                     value: defaults.no_websocket,
                     filter: defaults.no_websocket.is_none(),
+                    message: "",
+                },
+            ])
+            .unwrap_or(false);
+
+        // Configure `no_dashboard`.
+        self.no_dashboard = self
+            .get_value(vec![
+                GooseValue {
+                    value: Some(self.no_dashboard),
+                    filter: !self.no_dashboard,
+                    message: "no_dashboard",
+                },
+                GooseValue {
+                    value: defaults.no_dashboard,
+                    filter: defaults.no_dashboard.is_none(),
                     message: "",
                 },
             ])

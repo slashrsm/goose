@@ -15,7 +15,62 @@ use std::collections::HashMap;
 use std::fmt::Write;
 use std::marker::PhantomData;
 
-#[derive(Clone)]
+/// JSON-friendly per-second series for the live web dashboard.
+#[derive(Clone, Debug, Default, Serialize)]
+pub struct DashboardTimeseries {
+    /// Elapsed seconds for each sample (0..n).
+    pub elapsed_secs: Vec<usize>,
+    /// Total requests completed in each second.
+    pub requests_per_second: Vec<u32>,
+    /// Failed requests in each second.
+    pub errors_per_second: Vec<u32>,
+    /// Average response time in milliseconds for each second.
+    pub average_response_time_ms: Vec<f32>,
+    /// Active users at the end of each second.
+    pub users: Vec<usize>,
+}
+
+fn sum_optional_series(map: HashMap<String, TimeSeries<u32, u32>>) -> Vec<u32> {
+    let mut totals: Vec<u32> = Vec::new();
+    for series in map.values() {
+        let data = series.get_graph_data();
+        if data.len() > totals.len() {
+            totals.resize(data.len(), 0);
+        }
+        for (idx, value) in data.into_iter().enumerate() {
+            totals[idx] = totals[idx].saturating_add(value.unwrap_or(0));
+        }
+    }
+    totals
+}
+
+fn sum_moving_average_series(
+    map: &HashMap<String, TimeSeries<MovingAverage, f32>>,
+) -> Vec<f32> {
+    // Weight averages by per-key sample counts approximated via non-zero points.
+    let mut weighted_sum: Vec<f32> = Vec::new();
+    let mut weights: Vec<f32> = Vec::new();
+    for series in map.values() {
+        let data = series.get_graph_data();
+        if data.len() > weighted_sum.len() {
+            weighted_sum.resize(data.len(), 0.0);
+            weights.resize(data.len(), 0.0);
+        }
+        for (idx, value) in data.into_iter().enumerate() {
+            if let Some(v) = value {
+                weighted_sum[idx] += v;
+                weights[idx] += 1.0;
+            }
+        }
+    }
+    weighted_sum
+        .into_iter()
+        .zip(weights)
+        .map(|(sum, weight)| if weight > 0.0 { sum / weight } else { 0.0 })
+        .collect()
+}
+
+#[derive(Clone, Debug)]
 struct ItemsPerSecond(HashMap<String, TimeSeries<u32, u32>>);
 
 impl ItemsPerSecond {
@@ -62,6 +117,7 @@ impl ItemsPerSecond {
 }
 
 /// Used to collect graph data during a load test.
+#[derive(Clone, Debug)]
 pub(crate) struct GraphData {
     /// Counts requests per second for each request type.
     requests_per_second: ItemsPerSecond,
@@ -162,6 +218,36 @@ impl GraphData {
     /// Records number of users for a current second.
     pub(crate) fn record_users_per_second(&mut self, users: usize, second: usize) {
         self.users_per_second.set_and_maintain_last(second, users);
+    }
+
+    /// Export per-second series for the live dashboard API (totals only).
+    pub(crate) fn to_dashboard_timeseries(&self) -> DashboardTimeseries {
+        let requests_per_second = sum_optional_series(self.requests_per_second.get_map());
+        let errors_per_second = sum_optional_series(self.errors_per_second.get_map());
+        let average_response_time_ms = sum_moving_average_series(
+            &self.average_response_time_per_second,
+        );
+        let users: Vec<usize> = self
+            .users_per_second
+            .get_graph_data()
+            .into_iter()
+            .map(|v| v.unwrap_or(0))
+            .collect();
+
+        let len = requests_per_second
+            .len()
+            .max(errors_per_second.len())
+            .max(average_response_time_ms.len())
+            .max(users.len());
+        let elapsed_secs: Vec<usize> = (0..len).collect();
+
+        DashboardTimeseries {
+            elapsed_secs,
+            requests_per_second,
+            errors_per_second,
+            average_response_time_ms,
+            users,
+        }
     }
 
     /// Generate active users graph.

@@ -176,6 +176,14 @@ pub(crate) enum MetricsCommand {
         history: Vec<TestPlanHistory>,
         respond: tokio::sync::oneshot::Sender<GooseMetrics>,
     },
+    /// Return a snapshot of metrics and graph data for the live dashboard.
+    GetSnapshot {
+        duration: usize,
+        total_users: usize,
+        maximum_users: usize,
+        history: Vec<TestPlanHistory>,
+        respond: tokio::sync::oneshot::Sender<(GooseMetrics, GraphData)>,
+    },
     /// Flush all pending metrics and return the final state for reporting.
     Shutdown {
         duration: usize,
@@ -3221,6 +3229,23 @@ impl MetricsProcessor {
                 let _ = respond.send(snapshot);
                 false
             }
+            MetricsCommand::GetSnapshot {
+                duration,
+                total_users,
+                maximum_users,
+                history,
+                respond,
+            } => {
+                self.drain_pending();
+                self.sync_atomic_counters();
+                let mut snapshot = self.metrics.clone();
+                snapshot.duration = duration;
+                snapshot.total_users = total_users;
+                snapshot.maximum_users = maximum_users;
+                snapshot.history = history;
+                let _ = respond.send((snapshot, self.graph_data.clone()));
+                false
+            }
             MetricsCommand::Shutdown {
                 duration,
                 total_users,
@@ -3374,7 +3399,7 @@ impl MetricsProcessor {
 
             self.record_request_metric(request_metric);
 
-            if !self.configuration.report_file.is_empty() {
+            if self.should_collect_graph_data() {
                 let seconds_since_start = (request_metric.elapsed / 1000) as usize;
 
                 let key = format!(
@@ -3398,13 +3423,18 @@ impl MetricsProcessor {
         }
     }
 
+    /// Whether per-second graph samples should be retained (HTML report and/or dashboard).
+    fn should_collect_graph_data(&self) -> bool {
+        !self.configuration.report_file.is_empty() || !self.configuration.no_dashboard
+    }
+
     /// Process a single transaction metric: update aggregate and graph data.
     fn process_transaction_metric(&mut self, raw_transaction: &TransactionMetric) {
         self.metrics.transactions[raw_transaction.scenario_index]
             [raw_transaction.transaction_index]
             .set_time(raw_transaction.run_time, raw_transaction.success);
 
-        if !self.configuration.report_file.is_empty() {
+        if self.should_collect_graph_data() {
             self.graph_data
                 .record_transactions_per_second((raw_transaction.elapsed / 1000) as usize);
         }
@@ -3414,7 +3444,7 @@ impl MetricsProcessor {
     fn process_scenario_metric(&mut self, raw_scenario: &ScenarioMetric) {
         self.metrics.scenarios[raw_scenario.index].update(raw_scenario.run_time, raw_scenario.user);
 
-        if !self.configuration.report_file.is_empty() {
+        if self.should_collect_graph_data() {
             self.graph_data
                 .record_scenarios_per_second((raw_scenario.elapsed / 1000) as usize);
         }
