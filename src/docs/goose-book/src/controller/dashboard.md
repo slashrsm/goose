@@ -59,6 +59,7 @@ The dashboard **HTTP API is always the same**; only the browser UI is chosen wit
 | --- | --- | --- |
 | `dashboard-js` (**default**) | Vanilla JS + [ECharts](https://echarts.apache.org) (CDN) | Legend, axes, grid, tooltips; no WASM toolchain |
 | `dashboard-wasm` | [Yew](https://yew.rs/) → WebAssembly | Rust UI; SVG charts with legend, axes, and grid |
+| `dashboard-elm` | [Elm](https://elm-lang.org/) 0.19 | Typed FP UI; SVG charts; `scripts/build-dashboard-elm.sh` |
 
 ```bash
 # Default (JS + ECharts)
@@ -75,8 +76,7 @@ cargo build --release --example umami --no-default-features --features cookies,d
 ```
 
 `dashboard-js` is in **default** features. Adding `--features dashboard-wasm` therefore enables
-**both** unless you pass `--no-default-features`. That is supported: **WASM takes precedence**
-when both are enabled.
+**both** unless you pass `--no-default-features`. That is supported: **Precedence when several features are on: `dashboard-wasm` > `dashboard-elm` > `dashboard-js`.**
 
 ## WebAssembly UI rebuild
 
@@ -90,3 +90,12 @@ cargo build --release --no-default-features --features cookies,dashboard-wasm
 ```
 
 The `wasm-bindgen` CLI version must match the crate used by `dashboard-ui` (pinned to `0.2.126`).
+
+
+## Elm UI rebuild
+
+```bash
+# requires `elm` 0.19.1 on PATH
+./scripts/build-dashboard-elm.sh
+cargo build --release --features dashboard-elm
+```

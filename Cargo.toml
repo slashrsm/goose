@@ -70,11 +70,14 @@ rustls-tls = ["tokio-tungstenite/rustls"]
 # Cookie support - can be completely disabled by compiling with --no-default-features for maximum performance
 cookies = ["reqwest/cookies"]
 pdf-reports = ["headless_chrome", "urlencoding"]
-# Live web dashboard frontends (compile-time; pick exactly one for a given build).
+# Live web dashboard frontends (compile-time).
 #   dashboard-js   — vanilla JS + ECharts (default; nicest charts, CDN for ECharts)
 #   dashboard-wasm — Yew WebAssembly UI (rebuild with scripts/build-dashboard-ui.sh)
+#   dashboard-elm  — Elm 0.19 UI (rebuild with scripts/build-dashboard-elm.sh)
+# Precedence if several are enabled: wasm > elm > js
 dashboard-js = []
 dashboard-wasm = []
+dashboard-elm = []
 
 [dev-dependencies]
 httpmock = "0.8"
