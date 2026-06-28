@@ -2037,7 +2037,13 @@ impl GooseAttack {
         goose_attack_run_state.parent_to_throttle_tx = parent_to_throttle_tx;
 
         // Re-create the metrics channel and spawn a fresh processor.
-        // The old processor exits when its command channel closes.
+        // The old processor exits when its command and metrics channels close.
+        //
+        // IMPORTANT: Drop every Sender clone for the *old* channels *before*
+        // awaiting the old processor task. The live dashboard holds an extra
+        // `metrics_cmd_tx` inside `DashboardRuntime`; if we wait first, that
+        // clone keeps the command channel open and `reset_run_state` deadlocks
+        // here — users never spawn (Idle forever, empty dashboard).
         let (all_threads_metrics_tx, metrics_rx): (
             flume::Sender<GooseMetric>,
             flume::Receiver<GooseMetric>,
@@ -2055,16 +2061,17 @@ impl GooseAttack {
             goose_attack_run_state.request_counter_registry.clone(),
             goose_attack_run_state.all_threads_logger_tx.clone(),
         );
+        // Replace run-state sender (drops the attack-loop's old cmd Sender).
         goose_attack_run_state.metrics_cmd_tx = metrics_cmd_tx.clone();
+        // Replace dashboard sender next so no clone of the old cmd Sender remains.
+        if let Some(runtime) = goose_attack_run_state.dashboard.as_ref() {
+            dashboard::update_metrics_cmd_tx(runtime, metrics_cmd_tx).await;
+        }
+        // Old processor can now observe closed channels and exit.
         if let Some(handle) = goose_attack_run_state.metrics_processor_handle.take() {
             let _ = handle.await;
         }
         goose_attack_run_state.metrics_processor_handle = Some(tokio::spawn(processor.run()));
-
-        // Keep the dashboard pointed at the new metrics processor.
-        if let Some(runtime) = goose_attack_run_state.dashboard.as_ref() {
-            dashboard::update_metrics_cmd_tx(runtime, metrics_cmd_tx).await;
-        }
 
         // Try to create the requested report files, to confirm access.
         self.create_reports().await?;
